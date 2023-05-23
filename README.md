@@ -57,16 +57,16 @@ cd medical-claims/deploy/
 > - Azure Event Hub standard
 > - Azure Functions Consumption Plan
 > - Azure Application Insights
-> - Synapse Workspace
+> - Synapse Workspace (public access enabled)
 > - Apache Spark Pool
 
 * Run setup-synapse.sh with the appropriate parameters.
 
 ```bash
 #SAMPLE
-#./setup.sh 00000000-0000-0000-0000-000000000000 myrandomsuffix
+#./setup-synapse.sh 00000000-0000-0000-0000-000000000000 myrandomsuffix
 
-./setup.sh <subscription id> <resources suffix>
+./setup-synapse.sh <subscription id> <resources suffix>
 ```
 
 > This setup will provision the Ingestion pipeline and supporting components in the Synapse workspace created in the previous step.
@@ -104,12 +104,12 @@ This config file will generate 10000 patients, each with a random number of clai
 
 This will require logging into the azure portal, and accessing the Synapse workspace.
 
-1. Upload generated csv files to blob storage collection `claimsfs` created by `setup.sh` script
+1. Create a folder `SyntheaInput` in blob storage container `claimsfs` created by `setup.sh` script and upload generated csv files 
     - Pre-generated data can be found in this repo under `/deploy/csv` (this sample data has around 100 patients)
     - If you generated your own using the above instructions these will be in `{clone-path}/synthea/output/csv` folder
 1. Log into the Synapse workspace in Synapse Studio
 2. Locate the **Initial-Ingestion** pipeline in the **Integrate** section in the side menu
-3. Click the **Debug** button to run the pipeline
+3. Click the **Add trigger -> Trigger now** button to run the pipeline
 
 > The time this pipeline takes to run will heavily depend on the volume of data generated from Synthea. In addition, the Spark pool will often take 2-3 minutes to start up the first time it's used.
 
