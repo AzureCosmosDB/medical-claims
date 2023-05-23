@@ -82,7 +82,7 @@ cd medical-claims/deploy/
 ## Generate Sample Data (Optional)
 > Requirements: Java 11 or new
 ```bash
-sudo apt install openjdk-11-jre-headless
+sudo apt install openjdk-11-jdk
 ```
 
 1. Clone and build Synthea
