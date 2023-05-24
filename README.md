@@ -80,7 +80,9 @@ cd medical-claims/deploy/
 > - Pipeline for ingesting Synthea output into Cosmos Db Containers
 
 ## Generate Sample Data (Optional)
-> Requirements: Java 11 or new
+> Requirements: Java 11 or newer.
+> 
+> Building and generating sample data may take more than 15 minutes to complete.
 ```bash
 sudo apt install openjdk-11-jdk
 ```
@@ -89,7 +91,7 @@ sudo apt install openjdk-11-jdk
 ```bash
 git clone https://github.com/synthetichealth/synthea
 cd synthea
-./gradlew build check test
+./gradlew build -x check
 ```
 
 2. Run Synthea to generate patient information
