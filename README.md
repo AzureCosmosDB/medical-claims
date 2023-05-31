@@ -126,7 +126,7 @@ You can call Function APIs from Azure Portal or your favorite tool.
 
 ### 1. Run the Claim Publisher
 
-> This console app will generate random claims and publish them to the EventHub topic the FunctionApp subscribes to. Take note of one of the ClaimId uuids output from this tool.
+> This console app will generate random claims and publish them to the EventHub topic the FunctionApp subscribes to which then will be injested into Cosmos `Claim` container where we will store all Claim and Claim line item events data. **Take note of one of the ClaimId uuids output from this tool which has value over $500**.
 >
 > Console app has 2 **"RunMode"** options configurable in *settings.json* under `./src/CoreClaims.Publisher` : "OneTime" (default) and "Continous" 
 > as well as **"BatchSize"** (default - 10), **"Verbose"** (default - True) and **"SleepTime"** (default - 1000 ms).
@@ -155,7 +155,7 @@ cd ../src/CoreClaims.Publisher
 dotnet run
 ```
 
-### 2. Call GetClaimHistory function
+### 2. Call GetSingleClaimById or GetClaimHistory functions to see Claim Status changes:
 
 ```bash
 #Setting variables
@@ -163,7 +163,20 @@ SUFFIX=<your suffix>
 CLAIM_ID=<Claim UUID from Publisher>
 FUNCTION_KEY=<FunctionApp Authorization Key from Portal>
 
-curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/claim/$CLAIM_ID" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+> 
+> then get history:
+> 
+```bash
+#Setting variables
+SUFFIX=<your suffix>
+CLAIM_ID=<Claim UUID from Publisher>
+FUNCTION_KEY=<FunctionApp Authorization Key from Portal>
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/claim/$CLAIM_ID/history" \
     --request GET \
     --header "x-functions-key: $FUNCTION_KEY"
 ```
@@ -175,14 +188,15 @@ Check the status of the claim response. At this point it should be one of a few 
 - If the `totalAmount` value is greater than 200.00, it should be `Assigned`
 - Finally, if your initial ingestion run has a large volume of claims, it's possible the ChangeFeed triggers are still catching up, and the status may be `Initial`
 
-*Repeat these steps till you find a claim that has the status `Assigned`*
+*Repeat these steps till you find a claim that has the status `Assigned` which will be assigned to random AdjudicatorId*
 
 ### 3. Call AcknowledgeClaim function
 
+For simulation of manual claims Adjudication process we first need to call Claim Ackowledgement API to trigger downstream processing logic.
 This is simulating an Adjudicator acknowledging the claim has been assigned to them in preparation for adjudication.
 
 ```bash
-curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/claim/$CLAIM_ID/acknowledge" \
     --request POST \
     --header "x-functions-key: $FUNCTION_KEY" \
     --header "Content-Type: application/json" \
@@ -190,11 +204,17 @@ curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
 ```
 
 ### 3. Call AdjudicateClaim function
+This is simulating an Adjudicator making any adjustments to a claim (applying discounts), and proposing an update, or denying a claim.
 
-This is simulating an Adjudicator making any adjustments to a claim (applying discounts), and proposing an update, or denying a claim
+Once it is acknowledged in a previous step  - you can now execute this API to do a manual Adjudication based on following conditions for this API payload:
+
+Here you have some choices
+- Setting `claimStatus` to `Denied` will finalize the claim as `Denied` and publish the final status of the claim to a `ClaimDenied` topic on the event hub
+- Setting `claimStatus` to `Proposed` without changing the `lineItems`, or changing them such that the difference between the total before and after is less than 500.00 (configurable) will trigger automatic approval 
+- Setting `claimStatus` to `Proposed` while changing the `lineItems` so the total before and after differs by more than 500.00 will trigger manager approval, updating the status to `ApprovalRequired` and assigning a new adjudicator to the claim. At which point you can call the endpoint again, acting as the manager approver. To simulate this type of processing - copy `lineItems` array from GetClaimbyId output, paste/update in the payload for this API in addition to Status update with modified `discount` line item values total over $500.  
 
 ```bash
-curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/claim/$CLAIM_ID" \
     --request PUT \
     --header "x-functions-key: $FUNCTION_KEY" \
     --header "Content-Type: application/json" \
@@ -207,15 +227,12 @@ curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
     }'
 ```
 
-Here you have some choices
-- Setting `claimStatus` to `Denied` will finalize the claim as `Denied` and publish the final status of the claim to a `ClaimDenied` topic on the event hub
-- Setting `claimStatus` to `Proposed` without changing the `lineItems`, or changing them such that the difference between the total before and after is less than 500.00 (configurable) will trigger automatic approval
-- Setting `claimStatus` to `Proposed` while changing the `lineItems` so the total before and after differs by more than 500.00 will trigger manager approval, updating the status to `ApprovalRequired` and assigning a new adjudicator to the claim. At which point you can call the endpoint again, acting as the manager approver.
+
 
 ### 4. Reviewing the Claim history
 
 ```bash
-curl "https://fa-coreclaims-$SUFFIX.azurewebsites/api/claim/$CLAIM_ID" \
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/claim/$CLAIM_ID/history" \
     --request GET \
     --header "x-functions-key: $FUNCTION_KEY"
 ```
@@ -238,6 +255,69 @@ From the response you should be able to see the history of the various stages th
 ### 5. Post Run
 
 Once a Claim reaches the `Denied` or `Approved` state, it will get published to another pair of EventHub topics for hypothetical downstream processing.
+
+Note that when Claim get to final `Approved` state - member main document in `Member` container will get updated with increments of 2 additional attributes:
+```
+ "approvedCount": 6,
+ "approvedTotal": 5851.93
+```
+which you can see by calling Read MemberId API ( see below reference APIs):
+
+### 6. Additional Reference Read APIs
+
+Functions support a set of additional Reference Read APIs:
+1. GetMemberById
+
+```bash
+#Setting additional variables
+MEMBER_ID=<Member UUID>
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/member/$MEMBER_ID" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+
+
+
+2. List Claims for MemberId
+
+```bash
+#Setting additional variables
+MEMBER_ID=<Member UUID>
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/member/$MEMBER_ID/claims?offset=0&limit=50" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+
+3. List Claims for AdjudicatorId 
+
+```bash
+#Setting additional variables
+ADJUDICATOR_ID=<Member UUID>
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/adjudicator/$ADJUDICATOR_ID/claims?offset=0&limit=100" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+
+5. List Providers
+
+```bash
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/providers?offset=0&limit=50" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+
+4. List Payers
+```bash
+
+curl "https://fa-coreclaims-$SUFFIX.azurewebsites.net/api/payers?offset=0&limit=50" \
+    --request GET \
+    --header "x-functions-key: $FUNCTION_KEY"
+```
+
 
 # Clean Up
 
