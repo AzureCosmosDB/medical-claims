@@ -82,7 +82,9 @@ cd medical-claims/deploy/
 ## Generate Sample Data (Optional)
 > Requirements: Java 11 or newer.
 > 
-> This step is optional if you want to create and load large historical dataset based on Synthea data generator.The repo has pre-generated small dataset files ready to use under `/deploy/csv` (this sample data has around 100 patients).
+> This step is **optional** if you want to create and load large historical dataset based on Synthea data generator.
+>
+> The repo has pre-generated small dataset files ready to use under `/deploy/csv` (this sample data has around 100 patients).
 > If you want to continue with this step - note that building and generating sample data may take more than 15 minutes to complete.
 ```bash
 sudo apt install openjdk-11-jdk
@@ -125,6 +127,27 @@ You can call Function APIs from Azure Portal or your favorite tool.
 ### 1. Run the Claim Publisher
 
 > This console app will generate random claims and publish them to the EventHub topic the FunctionApp subscribes to. Take note of one of the ClaimId uuids output from this tool.
+>
+> Console app has 2 **"RunMode"** options configurable in *settings.json* under `./src/CoreClaims.Publisher` : "OneTime" (default) and "Continous" 
+> as well as **"BatchSize"** (default - 10), **"Verbose"** (default - True) and **"SleepTime"** (default - 1000 ms).
+>
+>  *settings.json* example:
+```
+{
+  "GeneratorOptions": {
+    "RunMode": "OneTime",
+    "BatchSize": 10,
+    "Verbose": true,
+    "SleepTime": 1000
+  },
+  "CoreClaimsCosmosDB": {
+    "accountEndpoint": "AccountEndpoint=https://*COSMOS_ACC_NAME*.documents.azure.com:443/;AccountKey=*COSMOS_ACC_KEY*;"
+  },
+  "CoreClaimsEventHub": {
+    "fullyQualifiedNamespace": "Endpoint=sb://*YOUR_EH_NAME*.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=*EH_KEY*"
+  }
+}
+```
 
 
 ```bash
