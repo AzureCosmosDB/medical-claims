@@ -82,7 +82,8 @@ cd medical-claims/deploy/
 ## Generate Sample Data (Optional)
 > Requirements: Java 11 or newer.
 > 
-> Building and generating sample data may take more than 15 minutes to complete.
+> This step is optional if you want to create and load large historical dataset based on Synthea data generator.The repo has pre-generated small dataset files ready to use under `/deploy/csv` (this sample data has around 100 patients).
+> If you want to continue with this step - note that building and generating sample data may take more than 15 minutes to complete.
 ```bash
 sudo apt install openjdk-11-jdk
 ```
