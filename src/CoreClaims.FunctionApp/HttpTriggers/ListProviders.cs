@@ -1,10 +1,12 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using CoreClaims.Infrastructure.Repository;
+using Microsoft.Azure.Functions.Worker;
+using CoreClaims.FunctionApp.HttpTriggers.Claims;
+using Microsoft.Azure.Functions.Worker.Http;
+using System.Net;
 
 namespace CoreClaims.FunctionApp.HttpTriggers
 {
@@ -17,19 +19,22 @@ namespace CoreClaims.FunctionApp.HttpTriggers
             _repository = repository;
         }
 
-        [FunctionName("ListProviders")]
-        public async Task<IActionResult> Run(
+        [Function("ListProviders")]
+        public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Function,
             "get",
-            Route = "providers")] HttpRequest req,
-            ILogger log)
+            Route = "providers")] HttpRequestData req,
+            FunctionContext context)
         {
-            using (log.BeginScope("HttpTrigger: ListPayers"))
+            var logger = context.GetLogger<ListProviders>();
+            using (logger.BeginScope("HttpTrigger: ListProviders"))
             {
                 var (offset, limit) = req.GetPagingQuery();
                 var result = await _repository.ListProviders(offset, limit);
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(result);
 
-                return new OkObjectResult(result);
+                return response;
             }
         }
     }

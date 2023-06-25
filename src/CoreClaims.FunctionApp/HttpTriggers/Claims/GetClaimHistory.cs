@@ -1,12 +1,14 @@
 using System;
 using System.Threading.Tasks;
 using CoreClaims.FunctionApp.Models.Response;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using CoreClaims.Infrastructure.Repository;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Azure.Cosmos.Serialization.HybridRow;
+using System.Net;
 
 namespace CoreClaims.FunctionApp.HttpTriggers.Claims
 {
@@ -19,13 +21,14 @@ namespace CoreClaims.FunctionApp.HttpTriggers.Claims
             _claimRepository = claimRepository;
         }
 
-        [FunctionName("GetClaimHistory")]
-        public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "claim/{claimId}/history")] HttpRequest req,
+        [Function("GetClaimHistory")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "claim/{claimId}/history")] HttpRequestData req,
             string claimId,
-            ILogger log)
+            FunctionContext context)
         {
-            using (log.BeginScope("HttpTrigger: GetClaimHistory"))
+            var logger = context.GetLogger<GetClaimHistory>();
+            using (logger.BeginScope("HttpTrigger: GetClaimHistory"))
             {
                 try
                 {
@@ -33,8 +36,8 @@ namespace CoreClaims.FunctionApp.HttpTriggers.Claims
                     var (header, details) = await _claimRepository.GetClaimHistory(claimId);
                     if (header == null)
                     {
-                        log.LogError($"Claim {claimId} not found.");
-                        return new NotFoundResult();
+                        logger.LogError($"Claim {claimId} not found.");
+                        return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
                     }
 
                     var claimHistory = new ClaimHistoryResponse
@@ -43,12 +46,16 @@ namespace CoreClaims.FunctionApp.HttpTriggers.Claims
                         History = details
                     };
 
-                    log.LogInformation($"Successfully retrieved history of Claim: {claimId}");
-                    return new OkObjectResult(claimHistory);
+                    logger.LogInformation($"Successfully retrieved history of Claim: {claimId}");
+                    var response = req.CreateResponse(HttpStatusCode.OK);
+                    await response.WriteAsJsonAsync(claimHistory);
+                    return response;
                 }
                 catch (Exception ex)
                 {
-                    return new BadRequestObjectResult(ex.Message);
+                    var response = req.CreateResponse(HttpStatusCode.BadRequest);
+                    await response.WriteStringAsync(ex.Message);
+                    return response;
                 }
             }
         }

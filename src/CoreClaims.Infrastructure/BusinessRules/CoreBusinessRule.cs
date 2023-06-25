@@ -52,7 +52,16 @@ namespace CoreClaims.Infrastructure.BusinessRules
             // Select random adjudicator.
             if (string.IsNullOrEmpty(claim.AdjudicatorId))
             {
-                var adjudicator = await _adjudicatorRepository.GetRandomAdjudicator();
+                Adjudicator adjudicator;
+                if (_options.Value.DemoMode && !string.IsNullOrWhiteSpace(_options.Value.DemoAdjudicatorId))
+                {
+                    adjudicator = await _adjudicatorRepository.GetAdjudicator(_options.Value.DemoAdjudicatorId) ?? await _adjudicatorRepository.GetRandomAdjudicator();
+                }
+                else
+                {
+                    adjudicator = await _adjudicatorRepository.GetRandomAdjudicator();
+                }
+                
                 if (adjudicator != null)
                 {
                     // Set Adjudicator to the claim and set status to Assigned.
@@ -87,10 +96,18 @@ namespace CoreClaims.Infrastructure.BusinessRules
                 }
             }
 
-            var manager = await _adjudicatorRepository.GetRandomAdjudicator("Manager");
+            Adjudicator manager;
+            if (_options.Value.DemoMode && !string.IsNullOrWhiteSpace(_options.Value.DemoManagerAdjudicatorId))
+            {
+                manager = await _adjudicatorRepository.GetAdjudicator(_options.Value.DemoManagerAdjudicatorId) ?? await _adjudicatorRepository.GetRandomAdjudicator("Manager");
+            }
+            else
+            {
+                manager = await _adjudicatorRepository.GetRandomAdjudicator("Manager");
+            }
 
             if (manager == null)
-                throw new NullReferenceException("Unable to find an appropriate manager to assign approval too");
+                throw new NullReferenceException("Unable to find an appropriate manager to assign approval to");
 
             claim.PreviousAdjudicatorId = claim.AdjudicatorId;
             claim.AdjudicatorId = manager.Id;

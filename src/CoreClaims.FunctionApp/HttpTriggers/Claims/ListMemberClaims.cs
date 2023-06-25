@@ -1,10 +1,11 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using CoreClaims.Infrastructure.Repository;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using System.Net;
 
 namespace CoreClaims.FunctionApp.HttpTriggers.Claims
 {
@@ -17,20 +18,22 @@ namespace CoreClaims.FunctionApp.HttpTriggers.Claims
             this._repository = repository;
         }
 
-        [FunctionName("ListMemberClaims")]
-        public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "member/{memberId}/claims")] HttpRequest req,
+        [Function("ListMemberClaims")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "member/{memberId}/claims")] HttpRequestData req,
             string memberId,
-            ILogger log)
+            FunctionContext context)
         {
-            using (log.BeginScope("HttpTrigger: ListMemberClaims"))
+            var logger = context.GetLogger<ListMemberClaims>();
+            using (logger.BeginScope("HttpTrigger: ListMemberClaims"))
             {
                 var (offset, limit) = req.GetPagingQuery();
                 var (startDate, endDate) = req.GetDateRangeQuery();
 
                 var result = await _repository.ListMemberClaims(memberId, offset, limit, startDate, endDate);
-
-                return new OkObjectResult(result);
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(result);
+                return response;
             }
         }
     }
